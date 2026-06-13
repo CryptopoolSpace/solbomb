@@ -46,9 +46,9 @@ html, body, #root {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
-.nav-left { display: flex; align-items: center; gap: 10px; }
-.nav-right { display: flex; align-items: center; gap: 8px; }
-.nav-brand { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 0; color: inherit; }
+.nav-left { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.nav-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nav-brand { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 0; color: inherit; flex-shrink: 0; }
 .nav-logo-box { font-size: 22px; line-height: 1; }
 .nav-brand-name {
   font-size: 18px; font-weight: 800;
@@ -60,12 +60,13 @@ html, body, #root {
   font-size: 10px; color: var(--green);
   background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.25);
   padding: 2px 7px; border-radius: 20px; font-weight: 600; letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 .nav-tab {
   background: transparent; border: none; color: var(--muted);
   font-size: 13px; font-weight: 600; font-family: var(--font);
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s; flex-shrink: 0;
 }
 .nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
 .nav-tab.active { color: var(--accent); background: rgba(0,194,255,0.1); }
@@ -73,22 +74,47 @@ html, body, #root {
   background: linear-gradient(135deg, #ff6b00, #ff0080);
   color: #fff; border: none; border-radius: 8px; padding: 8px 16px;
   font-weight: 700; font-size: 13px; cursor: pointer; font-family: var(--font);
-  transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.3px;
+  transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.3px; flex-shrink: 0;
 }
 .btn-launch-nav:hover { opacity: 0.9; transform: translateY(-1px); }
+
+/* WALLET BUTTON */
 .btn-connect {
   background: rgba(0,194,255,0.12); color: var(--accent);
   border: 1px solid rgba(0,194,255,0.3); border-radius: 8px;
-  padding: 8px 16px; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; font-size: 12px; font-weight: 600;
   cursor: pointer; font-family: var(--font);
   transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap; flex-shrink: 0;
 }
 .btn-connect:hover { background: rgba(0,194,255,0.2); border-color: rgba(0,194,255,0.5); }
+.btn-connect:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-connect.connected {
   background: rgba(0,230,118,0.1); color: var(--green);
   border-color: rgba(0,230,118,0.3);
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 5px;
+  max-width: 130px; overflow: hidden;
+  font-size: 11px; padding: 7px 10px;
 }
+
+.wallet-connected-group {
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0; flex-shrink: 0;
+}
+.wallet-bal {
+  color: var(--muted); font-size: 11px;
+  white-space: nowrap;
+}
+.airdrop-btn {
+  background: rgba(123,47,247,0.15); color: #a78bfa;
+  border: 1px solid rgba(123,47,247,0.3); border-radius: 7px;
+  padding: 6px 10px; font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  transition: background 0.15s; white-space: nowrap; flex-shrink: 0;
+}
+.airdrop-btn:hover { background: rgba(123,47,247,0.25); }
+.airdrop-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.airdrop-msg { font-size: 11px; color: var(--green); white-space: nowrap; }
 
 /* STATS */
 .stats-bar { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; padding: 20px 24px 0; }
@@ -346,11 +372,13 @@ html, body, #root {
   .home-sidebar { position: static; padding: 0 14px 32px; }
 }
 @media (max-width: 768px) {
-  .sb-nav { padding: 0 12px; gap: 6px; }
+  .sb-nav { padding: 0 12px; gap: 4px; }
   .nav-brand-name { font-size: 15px; }
   .devnet-badge { display: none; }
   .btn-launch-nav { display: none; }
-  .btn-connect { padding: 7px 10px; font-size: 12px; }
+  .btn-connect { padding: 6px 10px; font-size: 11px; }
+  .btn-connect.connected { max-width: 100px; }
+  .airdrop-btn { padding: 5px 7px; font-size: 10px; }
   .stats-bar { grid-template-columns: 1fr 1fr; padding: 14px 14px 0; gap: 10px; }
   .filter-row { padding: 12px 14px; gap: 6px; }
   .search-box { width: 100%; margin-left: 0; order: 10; }
@@ -362,9 +390,13 @@ html, body, #root {
   .form-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
+  .sb-nav { padding: 0 10px; }
+  .nav-brand-name { font-size: 14px; }
+  .wallet-bal { display: none; }
+  .airdrop-btn { display: none; }
+  .btn-connect.connected { max-width: 85px; font-size: 10px; padding: 6px 8px; }
   .stats-bar { gap: 8px; }
   .stat-val { font-size: 17px; }
-  .nav-right { gap: 5px; }
   .token-card { padding: 12px; }
   .modal-box { padding: 24px 18px; }
   .modal-actions { flex-direction: column; }
