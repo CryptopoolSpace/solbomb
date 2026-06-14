@@ -286,12 +286,17 @@ const handleLaunch = async () => {
     setLaunching(false);
     onSuccess(name.trim(), sym.trim().toUpperCase(), img, mint.toBase58());
 
-  } catch (err) {
+ } catch (err) {
   console.error(err);
-  const msg = err?.message || err?.toString() || JSON.stringify(err) || 'Unknown error';
+  const msg = err?.message 
+    || err?.logs?.join(' | ')
+    || err?.toString() 
+    || JSON.stringify(err) 
+    || 'Unknown error';
   setTxStatus({ state: 'error', msg: `❌ ${msg}` });
   setLaunching(false);
 }
+
 
 };
 
