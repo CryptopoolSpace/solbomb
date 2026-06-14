@@ -262,31 +262,8 @@ const handleLaunch = async () => {
       data,
     });
 
-    // Create mint account instruction
-    const mintSpace = 82;
-    const mintRent = await connection.getMinimumBalanceForRentExemption(mintSpace);
+  const tx = new Transaction().add(ix);
 
-    const createMintIx = SystemProgram.createAccount({
-      fromPubkey: publicKey,
-      newAccountPubkey: mint,
-      lamports: mintRent,
-      space: mintSpace,
-      programId: TOKEN_PROGRAM,
-    });
-
-    // Initialize mint instruction
-    const { createInitializeMintInstruction } = await import('@solana/spl-token');
-    const initMintIx = createInitializeMintInstruction(
-      mint,
-      6,
-      publicKey,  // mint authority = creator
-      null
-    );
-
-    const tx = new Transaction()
-      .add(createMintIx)
-      .add(initMintIx)
-      .add(ix);
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = blockhash;
