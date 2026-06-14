@@ -311,10 +311,12 @@ const handleLaunch = async () => {
     onSuccess(name.trim(), sym.trim().toUpperCase(), img, mint.toBase58());
 
   } catch (err) {
-    console.error(err);
-    setTxStatus({ state: 'error', msg: `❌ ${err.message || JSON.stringify(err) || 'Launch failed'}` });
+  console.error(err);
+  const msg = err?.message || err?.toString() || JSON.stringify(err) || 'Unknown error';
+  setTxStatus({ state: 'error', msg: `❌ ${msg}` });
+  setLaunching(false);
+}
 
-  }
 };
 
 
