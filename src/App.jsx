@@ -207,35 +207,54 @@ const handleLaunch = async () => {
   if (!name || !sym) { alert('Enter token name and symbol!'); return; }
   if (!connected || !publicKey) { setVisible(true); return; }
   setLaunching(true);
-  setTxStatus({ state: 'loading', msg: '⏳ Preparing transaction…' });
   try {
     const { Keypair } = await import('@solana/web3.js');
     const { createInitializeMint2Instruction } = await import('@solana/spl-token');
 
-    // Generate mint keypair
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
 
-    // Derive PDAs
-    const [bondingCurve] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode(CURVE_SEED), mint.toBytes()],
-      PROGRAM_ID
-    );
-    const [solVault] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode(SOL_VAULT_SEED), mint.toBytes()],
-      PROGRAM_ID
-    );
-    const [config] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode(CONFIG_PDA_SEED)],
-      PROGRAM_ID
+    // === TX 1: Create + Init Mint ===
+    setTxStatus({ state: 'loading', msg: '⏳ Step 1/2: Creating mint…' });
+
+    const mintRent = await connection.getMinimumBalanceForRentExemption(82);
+
+    const createMintIx = SystemProgram.createAccount({
+      fromPubkey: publicKey,
+      newAccountPubkey: mint,
+      lamports: mintRent,
+      space: 82,
+      programId: TOKEN_PROGRAM,
+    });
+
+    const initMintIx = createInitializeMint2Instruction(
+      mint, 6, publicKey, null
     );
 
-    // Token vault ATA — authority is bondingCurve
+    const tx1 = new Transaction().add(createMintIx).add(initMintIx);
+    const { blockhash: bh1, lastValidBlockHeight: lbh1 } = await connection.getLatestBlockhash('confirmed');
+    tx1.recentBlockhash = bh1;
+    tx1.feePayer = publicKey;
+    tx1.partialSign(mintKeypair);
+
+    const sig1 = await wallet.sendTransaction(tx1, connection, { signers: [mintKeypair] });
+    await connection.confirmTransaction({ signature: sig1, blockhash: bh1, lastValidBlockHeight: lbh1 }, 'confirmed');
+
+    // === TX 2: SolBomb Create ===
+    setTxStatus({ state: 'loading', msg: '⏳ Step 2/2: Launching token…' });
+
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(CURVE_SEED), mint.toBytes()], PROGRAM_ID
+    );
+    const [solVault] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(SOL_VAULT_SEED), mint.toBytes()], PROGRAM_ID
+    );
+    const [config] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(CONFIG_PDA_SEED)], PROGRAM_ID
+    );
     const tokenVault = getATA(mint, bondingCurve);
 
     const uri = 'https://gateway.pinata.cloud/ipfs/bafkreieuca7nuxhprr3psacgphtsvkbycjobez3vrikoyh3ounjuwhxili';
-
-    // Encode args
     const nameB = encodeString(name.trim());
     const symB = encodeString(sym.trim().toUpperCase());
     const uriB = encodeString(uri);
@@ -245,80 +264,43 @@ const handleLaunch = async () => {
     data.set(symB, 8 + nameB.length);
     data.set(uriB, 8 + nameB.length + symB.length);
 
-    // Ix 1 — Create mint account
-    const mintRent = await connection.getMinimumBalanceForRentExemption(82);
-    const createMintIx = SystemProgram.createAccount({
-      fromPubkey: publicKey,
-      newAccountPubkey: mint,
-      lamports: mintRent,
-      space: 82,
-      programId: TOKEN_PROGRAM,
-    });
-
-    // Ix 2 — Initialize mint (creator as mint authority)
-    const initMintIx = createInitializeMint2Instruction(
-      mint,
-      6,
-      publicKey,
-      null,
-    );
-
-    // Ix 3 — SolBomb create instruction
     const createIx = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: bondingCurve,            isSigner: false, isWritable: true  },
-        { pubkey: tokenVault,              isSigner: false, isWritable: true  },
-        { pubkey: solVault,                isSigner: false, isWritable: true  },
-        { pubkey: mint,                    isSigner: false, isWritable: true  },
-        { pubkey: config,                  isSigner: false, isWritable: true  },
-        { pubkey: publicKey,               isSigner: true,  isWritable: true  },
-        { pubkey: TOKEN_PROGRAM,           isSigner: false, isWritable: false },
-        { pubkey: ASSOC_TOKEN_PROGRAM,     isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT,             isSigner: false, isWritable: false },
+        { pubkey: bondingCurve,               isSigner: false, isWritable: true  },
+        { pubkey: tokenVault,                 isSigner: false, isWritable: true  },
+        { pubkey: solVault,                   isSigner: false, isWritable: true  },
+        { pubkey: mint,                       isSigner: false, isWritable: true  },
+        { pubkey: config,                     isSigner: false, isWritable: true  },
+        { pubkey: publicKey,                  isSigner: true,  isWritable: true  },
+        { pubkey: TOKEN_PROGRAM,              isSigner: false, isWritable: false },
+        { pubkey: ASSOC_TOKEN_PROGRAM,        isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId,    isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT,                isSigner: false, isWritable: false },
       ],
       data,
     });
 
-    const tx = new Transaction()
-      .add(createMintIx)
-      .add(initMintIx)
-      .add(createIx);
+    const tx2 = new Transaction().add(createIx);
+    const { blockhash: bh2, lastValidBlockHeight: lbh2 } = await connection.getLatestBlockhash('confirmed');
+    tx2.recentBlockhash = bh2;
+    tx2.feePayer = publicKey;
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = publicKey;
+    const sig2 = await wallet.sendTransaction(tx2, connection);
+    await connection.confirmTransaction({ signature: sig2, blockhash: bh2, lastValidBlockHeight: lbh2 }, 'confirmed');
 
-    // Mint keypair mesti sign createAccount
-    tx.partialSign(mintKeypair);
-
-    setTxStatus({ state: 'loading', msg: '⏳ Waiting for wallet approval…' });
-
-    const sig = await wallet.sendTransaction(tx, connection, {
-      signers: [mintKeypair],
-    });
-
-    await connection.confirmTransaction(
-      { signature: sig, blockhash, lastValidBlockHeight },
-      'confirmed'
-    );
-
-    setTxStatus({ state: 'success', msg: `✅ Token launched! TX: ${sig.slice(0, 16)}…` });
+    setTxStatus({ state: 'success', msg: `✅ Token launched! TX: ${sig2.slice(0, 16)}…` });
     setLaunching(false);
     onSuccess(name.trim(), sym.trim().toUpperCase(), img, mint.toBase58());
 
   } catch (err) {
     console.error(err);
-    const msg = err?.message
-      || err?.logs?.join(' | ')
-      || err?.toString()
-      || JSON.stringify(err)
-      || 'Unknown error';
+    const msg = err?.message || err?.toString() || 'Unknown error';
     setTxStatus({ state: 'error', msg: `❌ ${msg}` });
     setLaunching(false);
   }
 };
+
 
 
 
