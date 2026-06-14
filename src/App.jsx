@@ -198,54 +198,96 @@ function LaunchPage({ onSuccess }) {
   const [txStatus, setTxStatus] = useState(null);
   const fileRef = useRef(null);
 
-  const handleLaunch = async () => {
-    if (!name||!sym) { alert('Enter token name and symbol!'); return; }
-    if (!connected||!publicKey) { setVisible(true); return; }
-    setLaunching(true);
-    setTxStatus({ state:'loading', msg:'⏳ Generating mint keypair…' });
-    try {
-      const secretKey = new Uint8Array(64);
-      crypto.getRandomValues(secretKey);
-      const mint = new PublicKey(secretKey.slice(32));
-      const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED), mint.toBuffer()], PROGRAM_ID);
-      const [solVault] = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED), mint.toBuffer()], PROGRAM_ID);
-      const [config] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CONFIG_PDA_SEED)], PROGRAM_ID);
-      const tokenVault = getATA(mint, solVault);
-      const uri = 'https://gateway.pinata.cloud/ipfs/bafkreieuca7nuxhprr3psacgphtsvkbycjobez3vrikoyh3ounjuwhxili';
-      const nameB = encodeString(name.trim()), symB = encodeString(sym.trim().toUpperCase()), uriB = encodeString(uri);
-      const data = new Uint8Array(8+nameB.length+symB.length+uriB.length);
-      data.set(DISC.create,0); data.set(nameB,8); data.set(symB,8+nameB.length); data.set(uriB,8+nameB.length+symB.length);
-      const ix = new TransactionInstruction({
-        programId: PROGRAM_ID,
-        keys: [
-          {pubkey:bondingCurve,isSigner:false,isWritable:true},
-          {pubkey:tokenVault,isSigner:false,isWritable:true},
-          {pubkey:solVault,isSigner:false,isWritable:true},
-          {pubkey:mint,isSigner:true,isWritable:true},
-          {pubkey:config,isSigner:false,isWritable:true},
-          {pubkey:publicKey,isSigner:true,isWritable:true},
-          {pubkey:TOKEN_PROGRAM,isSigner:false,isWritable:false},
-          {pubkey:ASSOC_TOKEN_PROGRAM,isSigner:false,isWritable:false},
-          {pubkey:SystemProgram.programId,isSigner:false,isWritable:false},
-          {pubkey:SYSVAR_RENT,isSigner:false,isWritable:false},
-        ],
-        data,
-      });
-      const tx = new Transaction().add(ix);
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-      tx.recentBlockhash = blockhash; tx.feePayer = publicKey;
-      setTxStatus({state:'loading',msg:'⏳ Waiting for wallet approval…'});
-      const sig = await wallet.sendTransaction(tx, connection);
-      await connection.confirmTransaction(sig,'confirmed');
-      setTxStatus({state:'success',msg:`✅ Token launched! TX: ${sig.slice(0,16)}…`});
-      setLaunching(false);
-      onSuccess(name.trim(), sym.trim().toUpperCase(), img, mint.toBase58());
-    } catch(err) {
-      console.error(err);
-      setTxStatus({state:'error',msg:`❌ ${err.message||'Launch failed'}`});
-      setLaunching(false);
-    }
-  };
+const handleLaunch = async () => {
+  if (!name || !sym) { alert('Enter token name and symbol!'); return; }
+  if (!connected || !publicKey) { setVisible(true); return; }
+  setLaunching(true);
+  setTxStatus({ state: 'loading', msg: '⏳ Generating mint keypair…' });
+  try {
+    // Import Keypair
+    const { Keypair } = await import('@solana/web3.js');
+
+    // Generate proper mint keypair
+    const mintKeypair = Keypair.generate();
+    const mint = mintKeypair.publicKey;
+
+    // Derive PDAs
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(CURVE_SEED), mint.toBuffer()],
+      PROGRAM_ID
+    );
+    const [solVault] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(SOL_VAULT_SEED), mint.toBuffer()],
+      PROGRAM_ID
+    );
+    const [config] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode(CONFIG_PDA_SEED)],
+      PROGRAM_ID
+    );
+
+    // Token vault — ATA with token_vault (bondingCurve ATA) as authority
+    // Program uses: associated_token::authority = token_vault
+    // So ATA owner = bondingCurve PDA itself
+    const tokenVault = getATA(mint, bondingCurve);
+
+    const uri = 'https://gateway.pinata.cloud/ipfs/bafkreieuca7nuxhprr3psacgphtsvkbycjobez3vrikoyh3ounjuwhxili';
+
+    // Encode instruction data
+    const nameB = encodeString(name.trim());
+    const symB = encodeString(sym.trim().toUpperCase());
+    const uriB = encodeString(uri);
+    const data = new Uint8Array(8 + nameB.length + symB.length + uriB.length);
+    data.set(DISC.create, 0);
+    data.set(nameB, 8);
+    data.set(symB, 8 + nameB.length);
+    data.set(uriB, 8 + nameB.length + symB.length);
+
+    // Accounts — exact order matching Create struct in lib.rs
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: bondingCurve,         isSigner: false, isWritable: true  },
+        { pubkey: tokenVault,           isSigner: false, isWritable: true  },
+        { pubkey: solVault,             isSigner: false, isWritable: true  },
+        { pubkey: mint,                 isSigner: true,  isWritable: true  },
+        { pubkey: config,               isSigner: false, isWritable: true  },
+        { pubkey: publicKey,            isSigner: true,  isWritable: true  },
+        { pubkey: TOKEN_PROGRAM,        isSigner: false, isWritable: false },
+        { pubkey: ASSOC_TOKEN_PROGRAM,  isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT,          isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = publicKey;
+
+    // Mint keypair must sign — partial sign before sending
+    tx.partialSign(mintKeypair);
+
+    setTxStatus({ state: 'loading', msg: '⏳ Waiting for wallet approval…' });
+
+    // Send — wallet (creator) signs, mint already partial signed
+    const sig = await wallet.sendTransaction(tx, connection, {
+      signers: [mintKeypair],
+    });
+
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+
+    setTxStatus({ state: 'success', msg: `✅ Token launched! TX: ${sig.slice(0, 16)}…` });
+    setLaunching(false);
+    onSuccess(name.trim(), sym.trim().toUpperCase(), img, mint.toBase58());
+
+  } catch (err) {
+    console.error(err);
+    setTxStatus({ state: 'error', msg: `❌ ${err.message || 'Launch failed'}` });
+    setLaunching(false);
+  }
+};
+
 
   return (
     <div className="page-content">
