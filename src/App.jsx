@@ -312,8 +312,8 @@ const handleLaunch = async () => {
 
   } catch (err) {
     console.error(err);
-    setTxStatus({ state: 'error', msg: `❌ ${err.message || 'Launch failed'}` });
-    setLaunching(false);
+    setTxStatus({ state: 'error', msg: `❌ ${err.message || JSON.stringify(err) || 'Launch failed'}` });
+
   }
 };
 
