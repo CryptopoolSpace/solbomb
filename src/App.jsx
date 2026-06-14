@@ -217,11 +217,11 @@ const handleLaunch = async () => {
 
     // Derive PDAs
     const [bondingCurve] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode(CURVE_SEED), mint.toBuffer()],
+      [new TextEncoder().encode(CURVE_SEED), mint.toBytes()],
       PROGRAM_ID
     );
     const [solVault] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode(SOL_VAULT_SEED), mint.toBuffer()],
+      [new TextEncoder().encode(SOL_VAULT_SEED), mint.toBytes()],
       PROGRAM_ID
     );
     const [config] = PublicKey.findProgramAddressSync(
@@ -460,8 +460,8 @@ function TradingPanel({ token }) {
     setTxStatus({state:'loading',msg:`⏳ Preparing ${mode} transaction…`});
     try {
       const mint = new PublicKey(token.mintAddress);
-      const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED),mint.toBuffer()],PROGRAM_ID);
-      const [solVault] = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED),mint.toBuffer()],PROGRAM_ID);
+      const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED),mint.toBytes()],PROGRAM_ID);
+      const [solVault] = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED),mint.toBytes()],PROGRAM_ID);
       const [config] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CONFIG_PDA_SEED)],PROGRAM_ID);
       const tokenVault = getATA(mint,solVault);
       const userAta = getATA(mint,publicKey);
