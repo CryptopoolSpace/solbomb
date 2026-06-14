@@ -612,7 +612,6 @@ export default function App() {
         <span className="devnet-badge">DEVNET</span>
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:8}}>
           <WalletButton/>
-          {tab === 'board' && <button className="btn-purple" onClick={() => setTab('launch')}>💣 Drop Bomb</button>}
         </div>
       </header>
 
