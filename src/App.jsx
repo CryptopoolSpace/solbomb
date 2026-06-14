@@ -198,16 +198,16 @@ function LaunchPage({ onSuccess }) {
   const [txStatus, setTxStatus] = useState(null);
   const fileRef = useRef(null);
 
+
 const handleLaunch = async () => {
   if (!name || !sym) { alert('Enter token name and symbol!'); return; }
   if (!connected || !publicKey) { setVisible(true); return; }
   setLaunching(true);
-  setTxStatus({ state: 'loading', msg: '⏳ Generating mint keypair…' });
+  setTxStatus({ state: 'loading', msg: '⏳ Preparing transaction…' });
   try {
-    // Import Keypair
     const { Keypair } = await import('@solana/web3.js');
 
-    // Generate proper mint keypair
+    // Generate mint keypair
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
 
@@ -225,14 +225,12 @@ const handleLaunch = async () => {
       PROGRAM_ID
     );
 
-    // Token vault — ATA with token_vault (bondingCurve ATA) as authority
-    // Program uses: associated_token::authority = token_vault
-    // So ATA owner = bondingCurve PDA itself
+    // Token vault ATA — authority is token_vault (bondingCurve) per IDL
     const tokenVault = getATA(mint, bondingCurve);
 
     const uri = 'https://gateway.pinata.cloud/ipfs/bafkreieuca7nuxhprr3psacgphtsvkbycjobez3vrikoyh3ounjuwhxili';
 
-    // Encode instruction data
+    // Encode args
     const nameB = encodeString(name.trim());
     const symB = encodeString(sym.trim().toUpperCase());
     const uriB = encodeString(uri);
@@ -242,40 +240,67 @@ const handleLaunch = async () => {
     data.set(symB, 8 + nameB.length);
     data.set(uriB, 8 + nameB.length + symB.length);
 
-    // Accounts — exact order matching Create struct in lib.rs
+    // Accounts — exact order from IDL
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: bondingCurve,         isSigner: false, isWritable: true  },
-        { pubkey: tokenVault,           isSigner: false, isWritable: true  },
-        { pubkey: solVault,             isSigner: false, isWritable: true  },
-        { pubkey: mint,                 isSigner: true,  isWritable: true  },
-        { pubkey: config,               isSigner: false, isWritable: true  },
-        { pubkey: publicKey,            isSigner: true,  isWritable: true  },
-        { pubkey: TOKEN_PROGRAM,        isSigner: false, isWritable: false },
-        { pubkey: ASSOC_TOKEN_PROGRAM,  isSigner: false, isWritable: false },
+        { pubkey: bondingCurve,            isSigner: false, isWritable: true  },
+        { pubkey: tokenVault,              isSigner: false, isWritable: true  },
+        { pubkey: solVault,                isSigner: false, isWritable: true  },
+        { pubkey: mint,                    isSigner: false, isWritable: true  },
+        { pubkey: config,                  isSigner: false, isWritable: true  },
+        { pubkey: publicKey,               isSigner: true,  isWritable: true  },
+        { pubkey: TOKEN_PROGRAM,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_TOKEN_PROGRAM,     isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT,          isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT,             isSigner: false, isWritable: false },
       ],
       data,
     });
 
-    const tx = new Transaction().add(ix);
+    // Create mint account instruction
+    const mintSpace = 82;
+    const mintRent = await connection.getMinimumBalanceForRentExemption(mintSpace);
+
+    const createMintIx = SystemProgram.createAccount({
+      fromPubkey: publicKey,
+      newAccountPubkey: mint,
+      lamports: mintRent,
+      space: mintSpace,
+      programId: TOKEN_PROGRAM,
+    });
+
+    // Initialize mint instruction
+    const { createInitializeMintInstruction } = await import('@solana/spl-token');
+    const initMintIx = createInitializeMintInstruction(
+      mint,
+      6,
+      publicKey,  // mint authority = creator
+      null
+    );
+
+    const tx = new Transaction()
+      .add(createMintIx)
+      .add(initMintIx)
+      .add(ix);
+
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = blockhash;
     tx.feePayer = publicKey;
 
-    // Mint keypair must sign — partial sign before sending
+    // Mint keypair signs createAccount
     tx.partialSign(mintKeypair);
 
     setTxStatus({ state: 'loading', msg: '⏳ Waiting for wallet approval…' });
 
-    // Send — wallet (creator) signs, mint already partial signed
     const sig = await wallet.sendTransaction(tx, connection, {
       signers: [mintKeypair],
     });
 
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    await connection.confirmTransaction(
+      { signature: sig, blockhash, lastValidBlockHeight },
+      'confirmed'
+    );
 
     setTxStatus({ state: 'success', msg: `✅ Token launched! TX: ${sig.slice(0, 16)}…` });
     setLaunching(false);
