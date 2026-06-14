@@ -1,3 +1,4 @@
+// SolBomb Core v0.3 — sol_vault as ATA authority
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Mint, MintTo, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
