@@ -94,23 +94,19 @@ pub mod solbomb {
         curve.symbol = symbol.clone();
         curve.uri = uri;
         curve.curve_bump = ctx.bumps.bonding_curve;
-        curve.token_vault_bump = ctx.bumps.token_vault;
+        curve.token_vault_bump = 0; // ATA - no PDA bump needed
         curve.sol_vault_bump = ctx.bumps.sol_vault;
 
-        // Mint all tokens to token vault
-        let mint_key = ctx.accounts.mint.key();
-        let seeds = &[b"token_vault".as_ref(), mint_key.as_ref(), &[ctx.bumps.token_vault]];
-        let signer = &[&seeds[..]];
-
+        // Mint all tokens to token vault (ATA)
+        // Mint authority is the creator who signs
         token::mint_to(
-            CpiContext::new_with_signer(
+            CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 MintTo {
                     mint: ctx.accounts.mint.to_account_info(),
                     to: ctx.accounts.token_vault.to_account_info(),
-                    authority: ctx.accounts.token_vault.to_account_info(),
+                    authority: ctx.accounts.creator.to_account_info(),
                 },
-                signer,
             ),
             TOTAL_SUPPLY,
         )?;
@@ -168,9 +164,10 @@ pub mod solbomb {
         )?;
 
         // Tokens: token_vault → buyer
+        // sol_vault PDA is the authority of the token_vault ATA
         let mint_key = curve.mint;
-        let tvb = curve.token_vault_bump;
-        let seeds = &[b"token_vault".as_ref(), mint_key.as_ref(), &[tvb]];
+        let svb = curve.sol_vault_bump;
+        let seeds = &[b"sol_vault".as_ref(), mint_key.as_ref(), &[svb]];
         let signer = &[&seeds[..]];
 
         token::transfer(
@@ -179,7 +176,7 @@ pub mod solbomb {
                 Transfer {
                     from: ctx.accounts.token_vault.to_account_info(),
                     to: ctx.accounts.buyer_ata.to_account_info(),
-                    authority: ctx.accounts.token_vault.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
                 },
                 signer,
             ),
@@ -318,13 +315,17 @@ pub struct Buy<'info> {
     #[account(mut, seeds = [b"curve", bonding_curve.mint.as_ref()], bump = bonding_curve.curve_bump)]
     pub bonding_curve: Account<'info, BondingCurve>,
 
-    /// CHECK: token vault PDA
-    #[account(mut, seeds = [b"token_vault", mint.key().as_ref()], bump = bonding_curve.token_vault_bump)]
-    pub token_vault: AccountInfo<'info>,
-
-    /// CHECK: sol vault PDA
+    /// CHECK: sol vault PDA (also authority of token_vault)
     #[account(mut, seeds = [b"sol_vault", mint.key().as_ref()], bump = bonding_curve.sol_vault_bump)]
     pub sol_vault: AccountInfo<'info>,
+
+    /// Token vault ATA owned by sol_vault
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = sol_vault,
+    )]
+    pub token_vault: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub mint: Account<'info, Mint>,
@@ -352,13 +353,17 @@ pub struct Sell<'info> {
     #[account(mut, seeds = [b"curve", bonding_curve.mint.as_ref()], bump = bonding_curve.curve_bump)]
     pub bonding_curve: Account<'info, BondingCurve>,
 
-    /// CHECK: token vault PDA
-    #[account(mut, seeds = [b"token_vault", mint.key().as_ref()], bump = bonding_curve.token_vault_bump)]
-    pub token_vault: AccountInfo<'info>,
-
-    /// CHECK: sol vault PDA
+    /// CHECK: sol vault PDA (also authority of token_vault)
     #[account(mut, seeds = [b"sol_vault", mint.key().as_ref()], bump = bonding_curve.sol_vault_bump)]
     pub sol_vault: AccountInfo<'info>,
+
+    /// Token vault ATA owned by sol_vault
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = sol_vault,
+    )]
+    pub token_vault: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub mint: Account<'info, Mint>,
