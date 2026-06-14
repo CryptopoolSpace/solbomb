@@ -5,6 +5,7 @@ import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const SOLBOMB_MINT = 'GXEBKBdwVn91UM6Q33JK8k1Y3uK1NmT4wru8p25ZVgE8';
+const PROGRAM_ID = new PublicKey('3cxE3siG63fz6CSSd1TuSKHDKmAqh7JrLokydNX4qLV5');
 const EMOJIS = ['🐶','🐱','🚀','💎','🔥','⚡','🌙','🦊','🐸','🦁','🐉','💣','👾','🤖','🦄','🎯','💰','🍕','🌊','⭐'];
 const NAMES  = ['BombCat','MoonDog','SolFox','RocketApe','NoodleCoin','GigaChad','PepeSol','BonkTwo','LaserEyes','ChadCoin','SambalTok','CryptoNasi','ViralPepe','MegaDoge','StarToken','QuantumApe','CryptoFrog','SolBear','DiamondPaw','NeonShib'];
 const SYMS   = ['BCAT','MDOG','SFOX','RAPE','NDLC','GIGA','PSOL','BNKII','LEYE','CHAD','SMBL','NASI','VIRL','MEGA','STAR','QAPE','FROG','SBRR','DPAW','NSHIB'];
