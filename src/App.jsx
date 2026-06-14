@@ -58,8 +58,12 @@ const INITIAL_TOKENS = generateTokens(20);
 function formatAge(mins) { return mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`; }
 
 function getATA(mint, owner) {
-  return PublicKey.findProgramAddressSync([owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), mint.toBuffer()], ASSOC_TOKEN_PROGRAM)[0];
+  return PublicKey.findProgramAddressSync(
+    [owner.toBytes(), TOKEN_PROGRAM.toBytes(), mint.toBytes()],
+    ASSOC_TOKEN_PROGRAM
+  )[0];
 }
+
 
 function WalletButton() {
   const { connected, publicKey, disconnect, connecting } = useWallet();
