@@ -270,13 +270,12 @@ const handleLaunch = async () => {
     tx.feePayer = publicKey;
 
     // Mint keypair signs createAccount
-    tx.partialSign(mintKeypair);
+   // tx.partialSign(mintKeypair);
 
     setTxStatus({ state: 'loading', msg: '⏳ Waiting for wallet approval…' });
 
-    const sig = await wallet.sendTransaction(tx, connection, {
-      signers: [mintKeypair],
-    });
+    const sig = await wallet.sendTransaction(tx, connection);
+
 
     await connection.confirmTransaction(
       { signature: sig, blockhash, lastValidBlockHeight },
