@@ -258,7 +258,7 @@ const handleLaunch = async () => {
     const [config] = PublicKey.findProgramAddressSync(
       [new TextEncoder().encode(CONFIG_PDA_SEED)], PROGRAM_ID
     );
-    const tokenVault = getATA(mint, solVault);
+    const tokenVault = getATA(mint, bondingCurve);
 
 
     const uri = 'https://gateway.pinata.cloud/ipfs/bafkreieuca7nuxhprr3psacgphtsvkbycjobez3vrikoyh3ounjuwhxili';
