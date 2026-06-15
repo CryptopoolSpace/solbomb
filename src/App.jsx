@@ -455,7 +455,7 @@ function TradingPanel({ token }) {
       const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED),mint.toBytes()],PROGRAM_ID);
       const [solVault] = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED),mint.toBytes()],PROGRAM_ID);
       const [config] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CONFIG_PDA_SEED)],PROGRAM_ID);
-      const tokenVault = getATA(mint,solVault);
+      const tokenVault = getATA(mint, bondingCurve);
       const userAta = getATA(mint,publicKey);
       const data = new Uint8Array(24);
       if (mode==='buy') {
