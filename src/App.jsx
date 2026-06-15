@@ -431,55 +431,128 @@ function DisclaimerPage({ onBack }) {
   );
 }
 
-function TradingPanel({ token }) {
+function TradingPanel({ token, onStatsUpdate }) {
   const wallet = useWallet();
   const { connected, publicKey } = wallet;
   const { setVisible } = useWalletModal();
   const { connection } = useConnection();
-  const [mode, setMode] = useState('buy');
-  const [amount, setAmount] = useState('');
-  const [txStatus, setTxStatus] = useState(null);
-  const [trading, setTrading] = useState(false);
-  const price = parseFloat(token.price);
-  const solAmt = parseFloat(amount)||0;
-  const tokensEst = solAmt>0?Math.floor(solAmt/price).toLocaleString():'—';
 
-  const handleTrade = async () => {
-    if (!amount||parseFloat(amount)<=0) { alert('Enter an amount'); return; }
-    if (!connected||!publicKey) { setVisible(true); return; }
-    if (!token.mintAddress||!token.onChain) { setTxStatus({state:'error',msg:'Demo token — launch a real token to trade on-chain.'}); return; }
-    setTrading(true);
-    setTxStatus({state:'loading',msg:`⏳ Preparing ${mode} transaction…`});
+  const [mode,      setMode]      = useState('buy');
+  const [amount,    setAmount]    = useState('');
+  const [txStatus,  setTxStatus]  = useState(null);
+  const [trading,   setTrading]   = useState(false);
+  const [curveData, setCurveData] = useState(null);
+  const [tokenBal,  setTokenBal]  = useState(0n);
+  const [solBal,    setSolBal]    = useState(0);
+
+  const VIRTUAL_SOL_RES   = 30_000_000_000n;
+  const VIRTUAL_TOK_RES   = 1_073_000_000_000_000n;
+  const TOTAL_SUPPLY_RAW  = 1_000_000_000_000_000n;
+  const GRAD_SOL          = 85_000_000_000n;
+  const TOK_DECIMALS      = 6;
+  const FEE_BPS_N         = 100n;
+  const BPS_DENOM         = 10_000n;
+
+  const isOnChain = !!(token?.mintAddress && token?.onChain);
+
+  function decodeCurve(data) {
+    const view = new DataView(data.buffer, data.byteOffset);
+    const r64 = (off) => {
+      const lo = BigInt(view.getUint32(off, true));
+      const hi = BigInt(view.getUint32(off + 4, true));
+      return lo | (hi << 32n);
+    };
+    return { vSol: r64(8), vTok: r64(16), realSol: r64(24), realTok: r64(32), complete: data[40] === 1 };
+  }
+
+  const refreshData = useCallback(async () => {
+    if (!isOnChain) return;
     try {
       const mint = new PublicKey(token.mintAddress);
-      const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED),mint.toBytes()],PROGRAM_ID);
-      const [solVault] = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED),mint.toBytes()],PROGRAM_ID);
-      const [config] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CONFIG_PDA_SEED)],PROGRAM_ID);
-      const tokenVault = getATA(mint, bondingCurve);
-      const userAta = getATA(mint,publicKey);
-      const data = new Uint8Array(24);
-      if (mode==='buy') {
-        data.set(DISC.buy,0);
-        data.set(encodeu64(BigInt(Math.floor(solAmt*LAMPORTS_PER_SOL))),8);
-        data.set(encodeu64(BigInt(0)),16);
-      } else {
-        data.set(DISC.sell,0);
-        data.set(encodeu64(BigInt(Math.floor(solAmt*1_000_000))),8);
-        data.set(encodeu64(BigInt(0)),16);
+      const [curvePDA] = PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode(CURVE_SEED), mint.toBytes()], PROGRAM_ID
+      );
+      const info = await connection.getAccountInfo(curvePDA, 'confirmed');
+      if (info && info.data && info.data.length >= 41) {
+        const cd = decodeCurve(info.data);
+        setCurveData(cd);
+        if (onStatsUpdate) {
+          const priceInSol = cd.vTok === 0n ? 0 : (Number(cd.vSol) / 1e9) / (Number(cd.vTok) / 1e6);
+          const mcapUsd = priceInSol * (Number(TOTAL_SUPPLY_RAW) / 1e6) * 150;
+          const curvePct = Math.min(Number(cd.realSol * 100n / GRAD_SOL), 100);
+          const fmtP = priceInSol < 0.000001 ? priceInSol.toExponential(4) + ' SOL' : priceInSol.toFixed(8).replace(/\.?0+$/, '') + ' SOL';
+          const fmtM = mcapUsd >= 1e6 ? '$' + (mcapUsd/1e6).toFixed(2) + 'M' : mcapUsd >= 1e3 ? '$' + (mcapUsd/1e3).toFixed(1) + 'K' : '$' + mcapUsd.toFixed(0);
+          onStatsUpdate({ price: fmtP, mcap: fmtM, curve: curvePct, complete: cd.complete });
+        }
       }
-      const keys = mode==='buy' ? [
-        {pubkey:bondingCurve,isSigner:false,isWritable:true},
-        {pubkey:solVault,isSigner:false,isWritable:true},
-        {pubkey:tokenVault,isSigner:false,isWritable:true},
-        {pubkey:mint,isSigner:false,isWritable:true},
-        {pubkey:userAta,isSigner:false,isWritable:true},
-        {pubkey:config,isSigner:false,isWritable:true},
-        {pubkey:FEE_RECEIVER,isSigner:false,isWritable:true},
-        {pubkey:publicKey,isSigner:true,isWritable:true},
-        {pubkey:TOKEN_PROGRAM,isSigner:false,isWritable:false},
-        {pubkey:ASSOC_TOKEN_PROGRAM,isSigner:false,isWritable:false},
-        {pubkey:SystemProgram.programId,isSigner:false,isWritable:false},
-      ] : [
+      if (connected && publicKey) {
+        const ata = getATA(mint, publicKey);
+        const ataInfo = await connection.getAccountInfo(ata, 'confirmed');
+        if (ataInfo && ataInfo.data.length >= 72) {
+          const v = new DataView(ataInfo.data.buffer, ataInfo.data.byteOffset);
+          setTokenBal((BigInt(v.getUint32(64, true))) | (BigInt(v.getUint32(68, true)) << 32n));
+        } else { setTokenBal(0n); }
+        setSolBal((await connection.getBalance(publicKey)) / LAMPORTS_PER_SOL);
+      }
+    } catch (e) { console.error('[TradingPanel refreshData]', e); }
+  }, [connection, token, connected, publicKey, isOnChain, onStatsUpdate]);
+
+  useEffect(() => {
+    refreshData();
+    const id = setInterval(refreshData, 10000);
+    return () => clearInterval(id);
+  }, [refreshData]);
+
+  const vSol = curveData?.vSol ?? VIRTUAL_SOL_RES;
+  const vTok = curveData?.vTok ?? VIRTUAL_TOK_RES;
+  const amtNum = parseFloat(amount) || 0;
+
+  const solInLam = BigInt(Math.floor(amtNum * 1e9));
+  const feeLam   = solInLam * FEE_BPS_N / BPS_DENOM;
+  const netSolIn = solInLam - feeLam;
+  let tokensOutRaw = 0n;
+  if (netSolIn > 0n) { const k = vSol * vTok; tokensOutRaw = vTok - (k / (vSol + netSolIn)); }
+  const tokensOutHuman = Number(tokensOutRaw) / Math.pow(10, TOK_DECIMALS);
+
+  const tokenInRaw = BigInt(Math.floor(amtNum * Math.pow(10, TOK_DECIMALS)));
+  let solOutGross = 0n;
+  if (tokenInRaw > 0n) { const k = vSol * vTok; solOutGross = vSol - (k / (vTok + tokenInRaw)); }
+  const feeOutRaw   = solOutGross * FEE_BPS_N / BPS_DENOM;
+  const netSolOut   = solOutGross - feeOutRaw;
+  const solOutHuman = Number(netSolOut) / 1e9;
+  const tokenBalHuman = Number(tokenBal) / Math.pow(10, TOK_DECIMALS);
+
+  const validate = () => {
+    if (!amtNum || amtNum <= 0) return 'Enter an amount';
+    if (mode === 'buy') {
+      if (amtNum > solBal) return `Insufficient SOL (have ${solBal.toFixed(4)})`;
+      if (amtNum < 0.001) return 'Minimum buy: 0.001 SOL';
+    }
+    if (mode === 'sell' && amtNum > tokenBalHuman) return `Insufficient ${token.sym} (have ${tokenBalHuman.toLocaleString(undefined,{maximumFractionDigits:2})})`;
+    return null;
+  };
+
+  const handleTrade = async () => {
+    if (!connected || !publicKey) { setVisible(true); return; }
+    if (!isOnChain) { setTxStatus({ state:'error', msg:'🎭 Demo token — launch a real token to trade.' }); return; }
+    const err = validate();
+    if (err) { setTxStatus({ state:'error', msg:`⚠️ ${err}` }); return; }
+    setTrading(true);
+    setTxStatus({ state:'loading', msg:`⏳ Preparing ${mode} transaction…` });
+    try {
+      const mint = new PublicKey(token.mintAddress);
+      const [bondingCurve] = PublicKey.findProgramAddressSync([new TextEncoder().encode(CURVE_SEED), mint.toBytes()], PROGRAM_ID);
+      const [solVault]     = PublicKey.findProgramAddressSync([new TextEncoder().encode(SOL_VAULT_SEED), mint.toBytes()], PROGRAM_ID);
+      const [config]       = PublicKey.findProgramAddressSync([new TextEncoder().encode(CONFIG_PDA_SEED)], PROGRAM_ID);
+      const tokenVault     = getATA(mint, bondingCurve);
+      const userAta        = getATA(mint, publicKey);
+      const data = new Uint8Array(24);
+      if (mode === 'buy') {
+        data.set(DISC.buy, 0); data.set(encodeu64(solInLam), 8); data.set(encodeu64(0n), 16);
+      } else {
+        data.set(DISC.sell, 0); data.set(encodeu64(tokenInRaw), 8); data.set(encodeu64(0n), 16);
+      }
+      const keys = [
         {pubkey:bondingCurve,isSigner:false,isWritable:true},
         {pubkey:solVault,isSigner:false,isWritable:true},
         {pubkey:tokenVault,isSigner:false,isWritable:true},
@@ -494,39 +567,74 @@ function TradingPanel({ token }) {
       ];
       const ix = new TransactionInstruction({programId:PROGRAM_ID,keys,data});
       const tx = new Transaction().add(ix);
-      const {blockhash} = await connection.getLatestBlockhash('confirmed');
-      tx.recentBlockhash=blockhash; tx.feePayer=publicKey;
+      const {blockhash,lastValidBlockHeight} = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash; tx.feePayer = publicKey;
       setTxStatus({state:'loading',msg:'⏳ Waiting for wallet approval…'});
-      const sig = await wallet.sendTransaction(tx,connection);
-      await connection.confirmTransaction(sig,'confirmed');
-      setTxStatus({state:'success',msg:`✅ ${mode==='buy'?'Bought':'Sold'}! TX: ${sig.slice(0,12)}…`});
-    } catch(err) {
-      console.error(err);
-      setTxStatus({state:'error',msg:`❌ ${err.message||'Transaction failed'}`});
+      const sig = await wallet.sendTransaction(tx, connection);
+      setTxStatus({state:'loading',msg:'⏳ Confirming…'});
+      await connection.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');
+      const short = sig.slice(0,12)+'…';
+      setTxStatus({state:'success',msg:mode==='buy'?`✅ Bought ~${tokensOutHuman.toLocaleString(undefined,{maximumFractionDigits:0})} ${token.sym}! TX: ${short}`:`✅ Sold for ~${solOutHuman.toFixed(4)} SOL! TX: ${short}`});
+      setAmount('');
+      setTimeout(refreshData, 1500);
+    } catch(e) {
+      console.error(e);
+      setTxStatus({state:'error',msg:`❌ ${e?.logs?.find(l=>l.includes('Error'))||e.message||'Transaction failed'}`});
     } finally { setTrading(false); }
   };
+
+  const BUY_PRESETS = ['0.1','0.5','1','2'];
+  const SELL_PRESETS = tokenBalHuman > 0
+    ? [{label:'25%',val:(tokenBalHuman*0.25).toFixed(2)},{label:'50%',val:(tokenBalHuman*0.50).toFixed(2)},{label:'75%',val:(tokenBalHuman*0.75).toFixed(2)},{label:'MAX',val:tokenBalHuman.toFixed(2)}]
+    : [{label:'25%',val:'0'},{label:'50%',val:'0'},{label:'75%',val:'0'},{label:'MAX',val:'0'}];
 
   return (
     <div className="trading-panel">
       <div className="panel-title">Trade ${token.sym}</div>
-      {!token.onChain&&<div className="demo-notice">🎭 Demo token — launch a real token to trade on-chain</div>}
+      {!isOnChain&&<div className="demo-notice">🎭 Demo token — launch a real token to trade on-chain</div>}
+      {connected&&isOnChain&&(
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+          <span style={{color:'var(--muted)',fontSize:12}}>Your balance</span>
+          <span style={{fontSize:12,fontFamily:'var(--mono)',color:'var(--cyan)'}}>{tokenBalHuman.toLocaleString(undefined,{maximumFractionDigits:2})} ${token.sym}</span>
+        </div>
+      )}
       <div className="trade-tabs">
-        <button className={`trade-tab buy${mode==='buy'?' active':''}`} onClick={()=>{setMode('buy');setTxStatus(null);}}>Buy</button>
-        <button className={`trade-tab sell${mode==='sell'?' active':''}`} onClick={()=>{setMode('sell');setTxStatus(null);}}>Sell</button>
+        <button className={`trade-tab buy${mode==='buy'?' active':''}`} onClick={()=>{setMode('buy');setAmount('');setTxStatus(null);}}>Buy</button>
+        <button className={`trade-tab sell${mode==='sell'?' active':''}`} onClick={()=>{setMode('sell');setAmount('');setTxStatus(null);}}>Sell</button>
       </div>
-      <div className="preset-row">{['0.1','0.5','1','2'].map(v=><button key={v} className="preset-btn" onClick={()=>{setAmount(v);setTxStatus(null);}}>{v} SOL</button>)}</div>
+      <div className="preset-row">
+        {mode==='buy'
+          ?BUY_PRESETS.map(v=><button key={v} className="preset-btn" onClick={()=>{setAmount(v);setTxStatus(null);}}>{v} SOL</button>)
+          :SELL_PRESETS.map(p=><button key={p.label} className="preset-btn" onClick={()=>{setAmount(p.val);setTxStatus(null);}}>{p.label}</button>)
+        }
+      </div>
       <div className="trade-input-wrap">
         <input className="trade-input" type="number" placeholder="0.0" value={amount} onChange={e=>{setAmount(e.target.value);setTxStatus(null);}}/>
-        <span className="trade-suffix">SOL</span>
+        <span className="trade-suffix">{mode==='buy'?'SOL':`$${token.sym}`}</span>
       </div>
-      <div className="trade-est"><span style={{color:'var(--muted)'}}>You receive</span><span>{tokensEst} ${token.sym}</span></div>
-      <div className="trade-est"><span style={{color:'var(--muted)'}}>Platform fee (1%)</span><span>{solAmt>0?(solAmt*0.01).toFixed(4)+' SOL':'—'}</span></div>
-      {mode==='buy'?<button className="btn-buy" onClick={handleTrade} disabled={trading}>{trading?'⏳ Buying…':connected?'🟢 Buy Now':'◎ Connect to Buy'}</button>
-      :<button className="btn-sell" onClick={handleTrade} disabled={trading}>{trading?'⏳ Selling…':connected?'🔴 Sell Now':'◎ Connect to Sell'}</button>}
+      <div className="trade-est">
+        <span style={{color:'var(--muted)'}}>You receive</span>
+        <span>{mode==='buy'?(amtNum>0?`~${tokensOutHuman.toLocaleString(undefined,{maximumFractionDigits:0})} $${token.sym}`:`— $${token.sym}`):(amtNum>0?`~${solOutHuman.toFixed(6)} SOL`:'— SOL')}</span>
+      </div>
+      <div className="trade-est">
+        <span style={{color:'var(--muted)'}}>Platform fee (1%)</span>
+        <span>{amtNum>0?(mode==='buy'?`${(amtNum*0.01).toFixed(4)} SOL`:`${(Number(feeOutRaw)/1e9).toFixed(6)} SOL`):'—'}</span>
+      </div>
+      {mode==='buy'
+        ?<button className="btn-buy" onClick={handleTrade} disabled={trading||!amtNum}>{trading?'⏳ Buying…':connected?'🟢 Buy Now':'◎ Connect to Buy'}</button>
+        :<button className="btn-sell" onClick={handleTrade} disabled={trading||!amtNum}>{trading?'⏳ Selling…':connected?'🔴 Sell Now':'◎ Connect to Sell'}</button>
+      }
       {txStatus&&<div className={`tx-status ${txStatus.state}`}>{txStatus.msg}</div>}
+      {txStatus?.state==='success'&&token.mintAddress&&(
+        <a href={`https://solscan.io/token/${token.mintAddress}?cluster=devnet`} target="_blank" rel="noreferrer"
+          style={{fontSize:11,color:'var(--accent)',display:'block',marginTop:6,textAlign:'center'}}>
+          🔍 View on Solscan
+        </a>
+      )}
     </div>
   );
 }
+
 
 function TokenDetailPage({ token, onBack }) {
   return (
