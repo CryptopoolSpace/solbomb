@@ -4,8 +4,8 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
 
 const SOLBOMB_MINT = 'GXEBKBdwVn91UM6Q33JK8k1Y3uK1NmT4wru8p25ZVgE8';
-const PROGRAM_ID = new PublicKey('3cxE3siG63fz6CSSd1TuSKHDKmAqh7JrLokydNX4qLV5');
-const FEE_RECEIVER = new PublicKey('8tWE3ki7N1cWRZatk4Xwi3ntjaSbKsKGue5WmUooustt');
+const PROGRAM_ID = new PublicKey('ChsZQgo5Z6JpUnupLwRkNm7R2ahyggCsYNo7BP3TMQeJ');
+const FEE_RECEIVER = new PublicKey('8rFN96gNF7aQ34efvWxJuariwgRaCHdXxSzHupZXL97Y');
 const CONFIG_PDA_SEED = 'config';
 const CURVE_SEED = 'curve';
 const SOL_VAULT_SEED = 'sol_vault';
