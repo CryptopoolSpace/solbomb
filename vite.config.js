@@ -4,9 +4,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   define: {
-    'process.env': {},
-    global: 'globalThis',
-  },
+  'process.env': {},
+  global: 'globalThis',
+  'Buffer': ['buffer', 'Buffer'],
+},
+
   resolve: {
     alias: {
       stream: 'stream-browserify',
