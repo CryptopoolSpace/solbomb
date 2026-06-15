@@ -513,7 +513,7 @@ function TradingPanel({ token, onStatsUpdate }) {
   const [solBal,    setSolBal]    = useState(0);
 
   const VIRTUAL_SOL_RES   = 30_000_000_000n;
-  const VIRTUAL_TOK_RES   = 1_073_000_000_000_000n;
+  const VIRTUAL_TOK_RES   = 1_000_000_000_000_000n;
   const TOTAL_SUPPLY_RAW  = 1_000_000_000_000_000n;
   const GRAD_SOL          = 85_000_000_000n;
   const TOK_DECIMALS      = 6;
@@ -571,7 +571,7 @@ function TradingPanel({ token, onStatsUpdate }) {
   }, [refreshData]);
 
   const vSol = curveData?.vSol ?? VIRTUAL_SOL_RES;
-  const vTok = curveData?.vTok ?? VIRTUAL_TOK_RES;
+const vTok = curveData?.vTok ?? null;
   const amtNum = parseFloat(amount) || 0;
 
   const solInLam = BigInt(Math.floor(amtNum * 1e9));
