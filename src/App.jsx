@@ -30,11 +30,13 @@ function encodeu64(val) {
   return buf;
 }
 
+
 const DISC = {
-  create: new Uint8Array([153, 66, 159, 106, 104, 28, 78, 137]),
+  create: new Uint8Array([181, 157, 89, 71, 85, 129, 192, 42]),
   buy:    new Uint8Array([102, 6, 61, 18, 1, 218, 235, 234]),
   sell:   new Uint8Array([51, 230, 133, 164, 1, 127, 131, 173]),
 };
+
 
 
 const EMOJIS = ['🐶','🐱','🚀','💎','🔥','⚡','🌙','🦊','🐸','🦁','🐉','💣','👾','🤖','🦄','🎯','💰','🍕','🌊','⭐'];
