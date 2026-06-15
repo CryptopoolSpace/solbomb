@@ -335,8 +335,6 @@ const handleLaunch = async () => {
       </div>
     </div>
   );
-div>
-  );
 }
 function ProfilePage() {
   const { connected, publicKey, disconnect } = useWallet();
