@@ -264,7 +264,7 @@ const handleLaunch = async () => {
     const symB = encodeString(sym.trim().toUpperCase());
     const uriB = encodeString(uri);
     const data = new Uint8Array(8 + nameB.length + symB.length + uriB.length);
-    data.set(DISC.create, 0);
+    data.set(DISC.launch, 0);
     data.set(nameB, 8);
     data.set(symB, 8 + nameB.length);
     data.set(uriB, 8 + nameB.length + symB.length);
