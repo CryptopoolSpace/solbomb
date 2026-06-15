@@ -1,3 +1,4 @@
+import('https://cdn.jsdelivr.net/npm/eruda').then(e => e.default.init());
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
