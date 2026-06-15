@@ -6,7 +6,7 @@ export default defineConfig({
   define: {
   'process.env': {},
   global: 'globalThis',
-  'Buffer': ['buffer', 'Buffer'],
+ 
 },
 
   resolve: {
