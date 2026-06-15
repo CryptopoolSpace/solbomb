@@ -335,18 +335,22 @@ const handleLaunch = async () => {
       </div>
     </div>
   );
+div>
+  );
 }
-
 function ProfilePage() {
   const { connected, publicKey, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
   const { connection } = useConnection();
   const [balance, setBalance] = useState(null);
   const [solbombBal, setSolbombBal] = useState(null);
+  const [launchedTokens, setLaunchedTokens] = useState([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
+
   useEffect(() => {
-    if (!connected||!publicKey) { setBalance(null); setSolbombBal(null); return; }
+    if (!connected || !publicKey) { setBalance(null); setSolbombBal(null); setLaunchedTokens([]); return; }
     const fetch = async () => {
-      try { const b=await connection.getBalance(publicKey); setBalance((b/LAMPORTS_PER_SOL).toFixed(4)); } catch { setBalance('0'); }
+      try { const b = await connection.getBalance(publicKey); setBalance((b/LAMPORTS_PER_SOL).toFixed(4)); } catch { setBalance('0'); }
       try {
         const mintPubkey = new PublicKey(SOLBOMB_MINT);
         const accs = await connection.getParsedTokenAccountsByOwner(publicKey,{mint:mintPubkey},'confirmed');
@@ -354,8 +358,50 @@ function ProfilePage() {
         else setSolbombBal('0');
       } catch { setSolbombBal('—'); }
     };
-    fetch(); const id=setInterval(fetch,15000); return ()=>clearInterval(id);
-  }, [connected,publicKey,connection]);
+    fetch();
+    const id = setInterval(fetch, 15000);
+    return () => clearInterval(id);
+  }, [connected, publicKey, connection]);
+
+  useEffect(() => {
+    if (!connected || !publicKey) { setLaunchedTokens([]); return; }
+    const fetchLaunched = async () => {
+      setLoadingTokens(true);
+      try {
+        const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+          commitment: 'confirmed',
+          filters: [
+            { dataSize: 105 },
+            { memcmp: { offset: 41, bytes: publicKey.toBase58() } },
+          ],
+        });
+        const tokens = accounts.map(({ pubkey, account }) => {
+          try {
+            const data = account.data;
+            const view = new DataView(data.buffer, data.byteOffset);
+            const r64 = (off) => {
+              const lo = BigInt(view.getUint32(off, true));
+              const hi = BigInt(view.getUint32(off + 4, true));
+              return lo | (hi << 32n);
+            };
+            const vSol = r64(8);
+            const vTok = r64(16);
+            const realSol = r64(24);
+            const complete = data[40] === 1;
+            const mintBytes = data.slice(73, 105);
+            const mint = new PublicKey(mintBytes).toBase58();
+            const priceInSol = vTok === 0n ? 0 : (Number(vSol)/1e9) / (Number(vTok)/1e6);
+            const curvePct = Math.min(Number(realSol * 100n / 85_000_000_000n), 100);
+            return { mint, priceInSol, curvePct, complete, bondingCurve: pubkey.toBase58() };
+          } catch { return null; }
+        }).filter(Boolean);
+        setLaunchedTokens(tokens);
+      } catch (e) { console.error('[ProfilePage fetchLaunched]', e); }
+      finally { setLoadingTokens(false); }
+    };
+    fetchLaunched();
+  }, [connected, publicKey, connection]);
+
   if (!connected) return (
     <div className="page-content"><div className="profile-wrap"><div className="profile-empty">
       <div style={{fontSize:64,marginBottom:16}}>👤</div>
@@ -364,6 +410,7 @@ function ProfilePage() {
       <button className="btn-cyan" onClick={()=>setVisible(true)}>◎ Connect Wallet</button>
     </div></div></div>
   );
+
   const addr = publicKey.toBase58();
   return (
     <div className="page-content"><div className="profile-wrap">
@@ -380,7 +427,31 @@ function ProfilePage() {
       </div>
       <div className="holdings-note">◉ Devnet · Mint: {SOLBOMB_MINT.slice(0,8)}…{SOLBOMB_MINT.slice(-4)}</div>
       <div className="profile-section-title">Tokens Launched</div>
-      <div className="empty-state"><div style={{fontSize:32,marginBottom:8}}>💣</div><div style={{color:'var(--muted)',fontSize:13}}>No tokens launched yet</div></div>
+      {loadingTokens ? (
+        <div className="empty-state"><div style={{color:'var(--muted)',fontSize:13}}>⏳ Loading on-chain tokens…</div></div>
+      ) : launchedTokens.length === 0 ? (
+        <div className="empty-state"><div style={{fontSize:32,marginBottom:8}}>💣</div><div style={{color:'var(--muted)',fontSize:13}}>No tokens launched yet</div></div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {launchedTokens.map((t,i) => (
+            <div key={i} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'10px 14px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--accent)'}}>{t.mint.slice(0,8)}…{t.mint.slice(-6)}</span>
+                {t.complete && <span style={{fontSize:10,color:'#00e676',border:'1px solid #00e676',borderRadius:99,padding:'1px 6px'}}>🎓 Graduated</span>}
+              </div>
+              <div style={{display:'flex',gap:16,fontSize:12,color:'var(--muted)'}}>
+                <span>Price: <span style={{color:'#fff'}}>{t.priceInSol < 0.000001 ? t.priceInSol.toExponential(3) : t.priceInSol.toFixed(8)} SOL</span></span>
+                <span>Curve: <span style={{color:'var(--cyan)'}}>{t.curvePct.toFixed(1)}%</span></span>
+              </div>
+              <div style={{marginTop:6,height:4,background:'rgba(255,255,255,0.06)',borderRadius:99,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${t.curvePct}%`,background:'linear-gradient(90deg,#ff2d2d,#ff8c00)',borderRadius:99}}/>
+              </div>
+              <a href={`https://solscan.io/token/${t.mint}?cluster=devnet`} target="_blank" rel="noreferrer"
+                style={{fontSize:10,color:'var(--accent)',display:'block',marginTop:6}}>🔍 View on Solscan</a>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="profile-section-title">Transaction History</div>
       <div className="empty-state"><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{color:'var(--muted)',fontSize:13}}>No transactions yet</div></div>
     </div></div>
