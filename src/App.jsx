@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
-
 const SOLBOMB_MINT = 'GXEBKBdwVn91UM6Q33JK8k1Y3uK1NmT4wru8p25ZVgE8';
 const PROGRAM_ID = new PublicKey('ChsZQgo5Z6JpUnupLwRkNm7R2ahyggCsYNo7BP3TMQeJ');
 const FEE_RECEIVER = new PublicKey('8rFN96gNF7aQ34efvWxJuariwgRaCHdXxSzHupZXL97Y');
@@ -13,7 +12,6 @@ const SOL_VAULT_SEED = 'sol_vault';
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOC_TOKEN_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
-
 function encodeString(str) {
   const bytes = new TextEncoder().encode(str);
   const buf = new Uint8Array(4 + bytes.length);
@@ -637,40 +635,66 @@ function TradingPanel({ token, onStatsUpdate }) {
 
 
 function TokenDetailPage({ token, onBack }) {
+  const [liveStats, setLiveStats] = useState({
+    price:    token.price ? `${token.price} SOL` : '0.000001 SOL',
+    mcap:     `$${token.mc || '69'}`,
+    curve:    token.curve || 2,
+    complete: false,
+  });
+
+  const handleStatsUpdate = (stats) => {
+    setLiveStats(prev => ({ ...prev, ...stats }));
+  };
+
+  const curvePct = liveStats.curve;
+
   return (
-    <div className="page-content"><div className="detail-wrap">
-      <button className="back-btn" onClick={onBack}>← Board</button>
-      <div className="detail-header">
-        <div className="detail-img" style={{background:`${token.color}22`}}>{token.emoji}</div>
-        <div>
-          <div className="detail-name">{token.name} <span className="detail-sym">${token.sym}</span></div>
-          <div className="detail-links">
-            {token.mintAddress&&<a className="detail-link" href={`https://solscan.io/token/${token.mintAddress}?cluster=devnet`} target="_blank" rel="noreferrer">🔍 Solscan</a>}
-            <span className="detail-link muted">🐦 Twitter</span>
-            <span className="detail-link muted">💬 Telegram</span>
+    <div className="page-content">
+      <div className="detail-wrap">
+        <button className="back-btn" onClick={onBack}>← Board</button>
+        <div className="detail-header">
+          <div className="detail-img" style={{background:`${token.color}22`}}>{token.emoji}</div>
+          <div>
+            <div className="detail-name">{token.name} <span className="detail-sym">${token.sym}</span></div>
+            <div className="detail-links">
+              {token.mintAddress&&<a className="detail-link" href={`https://solscan.io/token/${token.mintAddress}?cluster=devnet`} target="_blank" rel="noreferrer">🔍 Solscan</a>}
+              <span className="detail-link muted">🐦 Twitter</span>
+              <span className="detail-link muted">💬 Telegram</span>
+            </div>
+          </div>
+        </div>
+        <div className="detail-grid">
+          <div className="detail-left">
+            <div className="detail-stat-row">
+              <div className="detail-stat"><div className="detail-stat-label">Price</div><div className="detail-stat-val">{liveStats.price}</div></div>
+              <div className="detail-stat"><div className="detail-stat-label">Market Cap</div><div className="detail-stat-val">{liveStats.mcap}</div></div>
+              <div className="detail-stat"><div className="detail-stat-label">Curve</div><div className="detail-stat-val">{typeof curvePct==='number'?curvePct.toFixed(1):curvePct}%</div></div>
+              <div className="detail-stat"><div className="detail-stat-label">Network</div><div className="detail-stat-val devnet">◉ Devnet</div></div>
+            </div>
+            <div className="curve-detail-box">
+              <div className="curve-detail-label">BONDING CURVE PROGRESS</div>
+              <div className="curve-big-track"><div className="curve-big-fill" style={{width:`${Math.min(curvePct,100)}%`}}/></div>
+              <div className="curve-detail-meta">
+                <span>{typeof curvePct==='number'?curvePct.toFixed(1):curvePct}% filled</span>
+                <span>${Math.floor(curvePct*850).toLocaleString()} / $69,000</span>
+              </div>
+              {liveStats.complete&&(
+                <div style={{marginTop:8,padding:'6px 12px',background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.3)',borderRadius:8,color:'#00e676',fontSize:12,textAlign:'center'}}>
+                  🎓 Graduated — liquidity migrated to DEX
+                </div>
+              )}
+            </div>
+            {token.mintAddress&&<div className="mint-info-box"><div className="mint-info-label">MINT ADDRESS</div><div className="mint-info-val">{token.mintAddress}</div></div>}
+          </div>
+          <div className="detail-right">
+            <TradingPanel token={token} onStatsUpdate={handleStatsUpdate}/>
           </div>
         </div>
       </div>
-      <div className="detail-grid">
-        <div className="detail-left">
-          <div className="detail-stat-row">
-            <div className="detail-stat"><div className="detail-stat-label">Price</div><div className="detail-stat-val">{token.price} SOL</div></div>
-            <div className="detail-stat"><div className="detail-stat-label">Market Cap</div><div className="detail-stat-val">${token.mc}</div></div>
-            <div className="detail-stat"><div className="detail-stat-label">Curve</div><div className="detail-stat-val">{token.curve}%</div></div>
-            <div className="detail-stat"><div className="detail-stat-label">Network</div><div className="detail-stat-val devnet">◉ Devnet</div></div>
-          </div>
-          <div className="curve-detail-box">
-            <div className="curve-detail-label">BONDING CURVE PROGRESS</div>
-            <div className="curve-big-track"><div className="curve-big-fill" style={{width:`${token.curve}%`}}/></div>
-            <div className="curve-detail-meta"><span>{token.curve}% filled</span><span>${Math.floor(token.curve*790).toLocaleString()} / $69,000</span></div>
-          </div>
-          {token.mintAddress&&<div className="mint-info-box"><div className="mint-info-label">MINT ADDRESS</div><div className="mint-info-val">{token.mintAddress}</div></div>}
-        </div>
-        <div className="detail-right"><TradingPanel token={token}/></div>
-      </div>
-    </div></div>
+    </div>
   );
 }
+
 
 function KotHPage({ tokens, onOpenToken }) {
   const [lastUpdated, setLastUpdated] = useState(Date.now());
