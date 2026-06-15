@@ -579,7 +579,7 @@ const vTok = curveData?.vTok ?? null;
   const netSolIn = solInLam - feeLam;
   let tokensOutRaw = 0n;
   if (netSolIn > 0n) { const k = vSol * vTok; tokensOutRaw = vTok - (k / (vSol + netSolIn)); }
-  const tokensOutHuman = Number(tokensOutRaw) / Math.pow(10, TOK_DECIMALS);
+  const tokensOutHuman = vTok ? Number(tokensOutRaw) / Math.pow(10, TOK_DECIMALS) : null;
 
   const tokenInRaw = BigInt(Math.floor(amtNum * Math.pow(10, TOK_DECIMALS)));
   let solOutGross = 0n;
