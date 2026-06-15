@@ -32,10 +32,11 @@ function encodeu64(val) {
 
 
 const DISC = {
-  launch: new Uint8Array([181, 157, 89, 71, 85, 129, 192, 42]),
+  launch: new Uint8Array([153, 241, 93, 225, 22, 69, 74, 61]),
   buy:    new Uint8Array([102, 6, 61, 18, 1, 218, 235, 234]),
   sell:   new Uint8Array([51, 230, 133, 164, 1, 127, 131, 173]),
 };
+
 
 
 
