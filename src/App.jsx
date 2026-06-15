@@ -31,10 +31,11 @@ function encodeu64(val) {
 }
 
 const DISC = {
-  create: new Uint8Array([24,30,200,40,5,28,7,119]),
-  buy:    new Uint8Array([102,6,61,18,1,218,235,234]),
-  sell:   new Uint8Array([51,230,133,164,1,127,131,173]),
+  create: new Uint8Array([153, 66, 159, 106, 104, 28, 78, 137]),
+  buy:    new Uint8Array([102, 6, 61, 18, 1, 218, 235, 234]),
+  sell:   new Uint8Array([51, 230, 133, 164, 1, 127, 131, 173]),
 };
+
 
 const EMOJIS = ['🐶','🐱','🚀','💎','🔥','⚡','🌙','🦊','🐸','🦁','🐉','💣','👾','🤖','🦄','🎯','💰','🍕','🌊','⭐'];
 const NAMES  = ['BombCat','MoonDog','SolFox','RocketApe','NoodleCoin','GigaChad','PepeSol','BonkTwo','LaserEyes','ChadCoin','SambalTok','CryptoNasi','ViralPepe','MegaDoge','StarToken','QuantumApe','CryptoFrog','SolBear','DiamondPaw','NeonShib'];
