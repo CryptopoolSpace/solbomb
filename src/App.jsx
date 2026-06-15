@@ -214,7 +214,7 @@ const handleLaunch = async () => {
   setLaunching(true);
   try {
     const { Keypair } = await import('@solana/web3.js');
-    const { createInitializeMint2Instruction } = await import('@solana/spl-token');
+    const { createInitializeMintInstruction } = await import('@solana/spl-token');
 
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
@@ -232,7 +232,7 @@ const handleLaunch = async () => {
       programId: TOKEN_PROGRAM,
     });
 
-    const initMintIx = createInitializeMint2Instruction(
+    const initMintIx = createInitializeMintInstruction(
       mint, 6, publicKey, null
     );
 
