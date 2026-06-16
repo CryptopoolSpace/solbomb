@@ -382,11 +382,12 @@ function ProfilePage() {
               const hi = BigInt(view.getUint32(off + 4, true));
               return lo | (hi << 32n);
             };
-            const vSol = r64(8);
-            const vTok = r64(16);
-            const realSol = r64(24);
-            const complete = data[40] === 1;
-            const mintBytes = data.slice(73, 105);
+            const vSol = r64(72);
+const vTok = r64(80);
+const realSol = r64(88);
+const complete = data[112] === 1;
+const mintBytes = data.slice(8, 40);
+
             const mint = new PublicKey(mintBytes).toBase58();
             const priceInSol = vTok === 0n ? 0 : (Number(vSol)/1e9) / (Number(vTok)/1e6);
             const curvePct = Math.min(Number(realSol * 100n / 85_000_000_000n), 100);
