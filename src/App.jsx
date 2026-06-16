@@ -711,7 +711,7 @@ const amtNum = parseFloat(amount) || 0;
       const short = sig.slice(0,12)+'…';
       setTxStatus({state:'success',msg:mode==='buy'?`✅ Bought ~${tokensOutHuman.toLocaleString(undefined,{maximumFractionDigits:0})} ${token.sym}! TX: ${short}`:`✅ Sold for ~${solOutHuman.toFixed(4)} SOL! TX: ${short}`});
       setAmount('');
-      setTimeout(refreshData, 1500);
+      await refreshData();
     } catch(e) {
       console.error(e);
       setTxStatus({state:'error',msg:`❌ ${e?.logs?.find(l=>l.includes('Error'))||e.message||'Transaction failed'}`});
