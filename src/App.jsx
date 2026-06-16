@@ -59,6 +59,69 @@ function generateTokens(n) {
 }
 
 const INITIAL_TOKENS = generateTokens(20);
+
+async function fetchOnChainTokens(connection) {
+  try {
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      commitment: 'confirmed',
+      filters: [
+        { memcmp: { offset: 0, bytes: '3eHMCa' } }
+      ]
+    });
+    return accounts.map(({ pubkey, account }) => {
+      try {
+        const data = account.data;
+        const view = new DataView(data.buffer, data.byteOffset);
+        const r64 = (off) => {
+          const lo = BigInt(view.getUint32(off, true));
+          const hi = BigInt(view.getUint32(off + 4, true));
+          return lo | (hi << 32n);
+        };
+        const mintBytes = data.slice(8, 40);
+        const mint = new PublicKey(mintBytes).toBase58();
+        const vSol = r64(72);
+        const vTok = r64(80);
+        const realSol = r64(88);
+        const graduated = data[112] === 1;
+        // Parse name
+        const nameLen = view.getUint32(121, true);
+        const nameBytes = data.slice(125, 125 + nameLen);
+        const name = new TextDecoder().decode(nameBytes) || 'Unknown';
+        // Parse symbol
+        const symOffset = 125 + nameLen;
+        const symLen = view.getUint32(symOffset, true);
+        const symBytes = data.slice(symOffset + 4, symOffset + 4 + symLen);
+        const sym = new TextDecoder().decode(symBytes) || '???';
+        const priceInSol = vTok === 0n ? 0 : (Number(vSol) / 1e9) / (Number(vTok) / 1e6);
+        const curvePct = Math.min(Number(realSol * 100n / 85_000_000_000n), 100);
+        const mcap = Math.floor(curvePct * 790).toLocaleString();
+        const EMOJIS_LIST = ['💣','🚀','🔥','💎','⚡','🌙','🦊','👾'];
+        const COLORS_LIST = ['#ff6b00','#7b2ff7','#00c2ff','#ff0080','#00e676'];
+        const seed = mint.charCodeAt(0) + mint.charCodeAt(1);
+        return {
+          id: pubkey.toBase58(),
+          name,
+          sym,
+          emoji: EMOJIS_LIST[seed % EMOJIS_LIST.length],
+          curve: curvePct,
+          price: priceInSol < 0.000001 ? priceInSol.toExponential(3) : priceInSol.toFixed(8),
+          change: 0,
+          age: 0,
+          mc: mcap,
+          desc: `${name} — launched on SolBomb`,
+          color: COLORS_LIST[seed % COLORS_LIST.length],
+          status: graduated ? 'graduated' : curvePct > 75 ? 'graduating' : 'bonding',
+          mintAddress: mint,
+          onChain: true,
+        };
+      } catch { return null; }
+    }).filter(Boolean);
+  } catch (e) {
+    console.error('[fetchOnChainTokens]', e);
+    return [];
+  }
+}
+
 function formatAge(mins) { return mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`; }
 
 function getATA(mint, owner) {
@@ -914,6 +977,20 @@ export default function App() {
   const [selectedToken, setSelectedToken] = useState(null);
   const [modal, setModal] = useState(null);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+const { connection } = useConnection();
+
+useEffect(() => {
+  fetchOnChainTokens(connection).then(onChainTokens => {
+    if (onChainTokens.length > 0) {
+      setTokens(prev => {
+        const existingIds = new Set(prev.map(t => t.id));
+        const newTokens = onChainTokens.filter(t => !existingIds.has(t.id));
+        return [...newTokens, ...prev];
+      });
+    }
+  });
+}, [connection]);
+
 
   const handleSuccess = (name, sym, img, mintAddress=null) => {
     const newToken = {
