@@ -1,4 +1,4 @@
-import('https://cdn.jsdelivr.net/npm/eruda').then(e => e.default.init());
+
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -369,9 +369,9 @@ function ProfilePage() {
         const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
           commitment: 'confirmed',
           filters: [
-            { dataSize: 105 },
-            { memcmp: { offset: 41, bytes: publicKey.toBase58() } },
-          ],
+  { memcmp: { offset: 40, bytes: publicKey.toBase58() } },
+],
+
         });
         const tokens = accounts.map(({ pubkey, account }) => {
           try {
@@ -529,7 +529,8 @@ function TradingPanel({ token, onStatsUpdate }) {
       const hi = BigInt(view.getUint32(off + 4, true));
       return lo | (hi << 32n);
     };
-    return { vSol: r64(8), vTok: r64(16), realSol: r64(24), realTok: r64(32), complete: data[40] === 1 };
+    return { vSol: r64(72), vTok: r64(80), realSol: r64(88), realTok: r64(96), complete: data[112] === 1 };
+
   }
 
   const refreshData = useCallback(async () => {
