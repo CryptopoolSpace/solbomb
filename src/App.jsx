@@ -635,9 +635,45 @@ function TradingPanel({ token, onStatsUpdate }) {
     return () => clearInterval(id);
   }, [refreshData]);
 
-  const vSol = curveData?.vSol ?? VIRTUAL_SOL_RES;
+  const [liveEstimate, setLiveEstimate] = useState(null);
+const estimateTimer = useRef(null);
+
+useEffect(() => {
+  if (!amount || parseFloat(amount) <= 0 || !isOnChain) {
+    setLiveEstimate(null);
+    return;
+  }
+  if (estimateTimer.current) clearTimeout(estimateTimer.current);
+  estimateTimer.current = setTimeout(async () => {
+    try {
+      const mint = new PublicKey(token.mintAddress);
+      const [curvePDA] = PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode(CURVE_SEED), mint.toBytes()], PROGRAM_ID
+      );
+      const info = await connection.getAccountInfo(curvePDA, 'confirmed');
+      if (!info) return;
+      const cd = decodeCurve(info.data);
+      const amtNum = parseFloat(amount);
+      if (mode === 'buy') {
+        const solInLam = BigInt(Math.floor(amtNum * 1e9));
+        const fee = solInLam * FEE_BPS_N / BPS_DENOM;
+        const net = solInLam - fee;
+        const out = cd.vTok - (cd.vSol * cd.vTok / (cd.vSol + net));
+        setLiveEstimate(Number(out) / 1e6);
+      } else {
+        const tokIn = BigInt(Math.floor(amtNum * 1e6));
+        const gross = cd.vSol - (cd.vSol * cd.vTok / (cd.vTok + tokIn));
+        const fee = gross * FEE_BPS_N / BPS_DENOM;
+        setLiveEstimate(Number(gross - fee) / 1e9);
+      }
+    } catch (e) { console.error('[liveEstimate]', e); }
+  }, 600);
+}, [amount, mode, isOnChain, token, connection]);
+
+const vSol = curveData?.vSol ?? VIRTUAL_SOL_RES;
 const vTok = curveData?.vTok ?? null;
-  const amtNum = parseFloat(amount) || 0;
+const amtNum = parseFloat(amount) || 0;
+
 
   const solInLam = BigInt(Math.floor(amtNum * 1e9));
   const feeLam   = solInLam * FEE_BPS_N / BPS_DENOM;
@@ -746,7 +782,13 @@ const vTok = curveData?.vTok ?? null;
       </div>
       <div className="trade-est">
         <span style={{color:'var(--muted)'}}>You receive</span>
-        <span>{mode==='buy'?(amtNum>0?`~${tokensOutHuman.toLocaleString(undefined,{maximumFractionDigits:0})} $${token.sym}`:`— $${token.sym}`):(amtNum>0?`~${solOutHuman.toFixed(6)} SOL`:'— SOL')}</span>
+       <span>
+  {mode==='buy'
+    ? (liveEstimate !== null ? `~${liveEstimate.toLocaleString(undefined,{maximumFractionDigits:0})} $${token.sym}` : amtNum>0 ? '⏳ calculating…' : `— $${token.sym}`)
+    : (liveEstimate !== null ? `~${liveEstimate.toFixed(6)} SOL` : amtNum>0 ? '⏳ calculating…' : '— SOL')
+  }
+</span>
+
       </div>
       <div className="trade-est">
         <span style={{color:'var(--muted)'}}>Platform fee (1%)</span>
